@@ -1,0 +1,13 @@
+{
+  "name": "wordle",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "engines": { "node": ">=22" },
+  "pnpm": { "onlyBuiltDependencies": ["esbuild"] },
+  "scripts": {
+    "dev": "pnpm --filter @wordle/web dev",
+    "build": "pnpm --filter @wordle/web build",
+    "preview": "pnpm --filter @wordle/web preview",
+    "typecheck": "pnpm --filter @wordle/web exec tsc -b"
+  }
+}
