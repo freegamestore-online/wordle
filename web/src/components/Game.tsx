@@ -214,14 +214,14 @@ export function Game({ onScore, onGameOver }: GameProps) {
         <div className="flex gap-4">
           <button
             onClick={() => startGame("daily")}
-            className="px-6 py-3 rounded-xl font-semibold"
+            className="px-6 py-3 rounded-xl font-semibold min-h-[2.75rem]"
             style={{ background: "var(--accent)", color: "#fff" }}
           >
             Daily
           </button>
           <button
             onClick={() => startGame("practice")}
-            className="px-6 py-3 rounded-xl font-semibold"
+            className="px-6 py-3 rounded-xl font-semibold min-h-[2.75rem]"
             style={{ background: "var(--success)", color: "#fff" }}
           >
             Practice
