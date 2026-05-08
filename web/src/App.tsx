@@ -1,7 +1,6 @@
 import { useState, useCallback, useRef } from "react";
-import { Shell } from "./components/Shell";
+import { GameShell, GameTopbar } from "@freeappstore/games";
 import { Game } from "./components/Game";
-import { Leaderboard } from "./components/Leaderboard";
 import { useLeaderboard } from "./hooks/useLeaderboard";
 import type { GamePhase } from "./types";
 
@@ -25,7 +24,7 @@ export default function App() {
   const [streak, setStreak] = useState(getStreak);
   const [gameKey, setGameKey] = useState(0);
   const scoreRef = useRef(0);
-  const { topScores, recentScores, submitScore, loading } = useLeaderboard("wordle");
+  const { submitScore } = useLeaderboard("wordle");
 
   const handleScore = useCallback((s: number) => {
     scoreRef.current = s;
@@ -67,73 +66,23 @@ export default function App() {
   }, []);
 
   return (
-    <Shell
-      sidebar={
-        <nav className="flex-1 px-4 flex flex-col gap-3 py-4">
-          <div className="text-sm font-semibold" style={{ color: "var(--muted)" }}>
-            Stats
-          </div>
-          <div className="flex gap-6">
-            <div>
-              <div
-                className="text-3xl font-bold"
-                style={{ fontFamily: "Fraunces, serif" }}
-              >
-                {streak}
-              </div>
-              <div className="text-xs" style={{ color: "var(--muted)" }}>
-                Streak
-              </div>
-            </div>
-            <div>
-              <div
-                className="text-3xl font-bold"
-                style={{ fontFamily: "Fraunces, serif" }}
-              >
-                {bestScore}
-              </div>
-              <div className="text-xs" style={{ color: "var(--muted)" }}>
-                Best
-              </div>
-            </div>
-          </div>
-          {phase === "over" && (
-            <div className="text-sm" style={{ color: score > 0 ? "var(--success)" : "var(--error)" }}>
-              {score > 0 ? `Score: ${score}` : "Better luck next time"}
-            </div>
-          )}
-          {phase !== "playing" && (
-            <button
-              onClick={start}
-              className="mt-4 px-4 py-2 rounded-xl font-semibold text-sm"
-              style={{ background: "var(--accent)", color: "#fff" }}
-            >
-              {phase === "menu" ? "Play" : "Play Again"}
-            </button>
-          )}
-          <div
-            className="mt-2 border-t"
-            style={{ borderColor: "var(--line)" }}
-          >
-            <div className="text-xs font-semibold px-4 pt-3" style={{ color: "var(--muted)" }}>
-              Leaderboard
-            </div>
-            <Leaderboard topScores={topScores} recentScores={recentScores} loading={loading} />
-          </div>
-        </nav>
-      }
-      dock={
-        <>
-          <div className="text-sm font-semibold">
-            Streak: {streak}
-          </div>
-          <div className="text-xs" style={{ color: "var(--muted)" }}>
-            Best: {bestScore}
-          </div>
-        </>
+    <GameShell
+      topbar={
+        <GameTopbar
+          title="Wordle"
+          stats={[
+            { label: "Streak", value: streak },
+            { label: "Best", value: bestScore },
+          ]}
+          actions={
+            phase !== "playing" ? (
+              <button onClick={start}>{phase === "menu" ? "Play" : "Play Again"}</button>
+            ) : undefined
+          }
+        />
       }
     >
-      <div className="relative w-full h-full min-h-[400px]">
+      <div className="relative w-full h-full">
         {phase === "playing" ? (
           <Game key={gameKey} onScore={handleScore} onGameOver={handleGameOver} />
         ) : (
@@ -170,6 +119,6 @@ export default function App() {
           </div>
         )}
       </div>
-    </Shell>
+    </GameShell>
   );
 }
