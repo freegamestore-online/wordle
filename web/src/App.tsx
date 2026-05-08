@@ -91,14 +91,7 @@ export default function App() {
               </ul>
             </div>
           }
-          actions={
-            <>
-              {phase !== "playing" && (
-                <button className="min-h-[2.75rem] min-w-[2.75rem]" onClick={start}>{phase === "menu" ? "Play" : "Play Again"}</button>
-              )}
-              <GameAuth />
-            </>
-          }
+          actions={<GameAuth />}
         />
       }
     >
