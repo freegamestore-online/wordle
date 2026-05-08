@@ -18,7 +18,7 @@ function getStreak(): number {
 }
 
 export default function App() {
-  const [phase, setPhase] = useState<GamePhase>("menu");
+  const [phase, setPhase] = useState<GamePhase>("playing");
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(getBestScore);
   const [streak, setStreak] = useState(getStreak);
@@ -96,38 +96,26 @@ export default function App() {
       }
     >
       <div className="relative w-full h-full">
-        {phase === "playing" ? (
-          <Game key={gameKey} onScore={handleScore} onGameOver={handleGameOver} />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full gap-4">
-            <h1
-              className="text-4xl font-bold"
-              style={{ fontFamily: "Fraunces, serif" }}
+        <Game key={gameKey} onScore={handleScore} onGameOver={handleGameOver} />
+        {phase === "over" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4" style={{ background: "rgba(0,0,0,0.55)" }}>
+            <p
+              className="text-xl font-bold"
+              style={{
+                color: score > 0 ? "var(--success)" : "var(--error)",
+                fontFamily: "Fraunces, serif",
+              }}
             >
-              Wordle
-            </h1>
-            {phase === "over" && (
-              <p
-                className="text-xl font-bold"
-                style={{
-                  color: score > 0 ? "var(--success)" : "var(--error)",
-                  fontFamily: "Fraunces, serif",
-                }}
-              >
-                {score > 0
-                  ? `You got it! Score: ${score}`
-                  : "Better luck next time!"}
-              </p>
-            )}
-            <p style={{ color: "var(--muted)" }}>
-              Guess the 5-letter word in 6 tries.
+              {score > 0
+                ? `You got it! Score: ${score}`
+                : "Better luck next time!"}
             </p>
             <button
               onClick={start}
               className="px-6 py-3 rounded-xl font-semibold min-h-[2.75rem]"
               style={{ background: "var(--accent)", color: "#fff" }}
             >
-              {phase === "menu" ? "Play" : "Play Again"}
+              Play Again
             </button>
           </div>
         )}
