@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { GameShell, GameTopbar } from "@freegamestore/games";
+import { GameShell, GameTopbar, GameAuth } from "@freegamestore/games";
 import { Game } from "./components/Game";
 import { useLeaderboard } from "./hooks/useLeaderboard";
 import type { GamePhase } from "./types";
@@ -75,9 +75,12 @@ export default function App() {
             { label: "Best", value: bestScore },
           ]}
           actions={
-            phase !== "playing" ? (
-              <button onClick={start}>{phase === "menu" ? "Play" : "Play Again"}</button>
-            ) : undefined
+            <>
+              {phase !== "playing" && (
+                <button onClick={start}>{phase === "menu" ? "Play" : "Play Again"}</button>
+              )}
+              <GameAuth />
+            </>
           }
         />
       }
