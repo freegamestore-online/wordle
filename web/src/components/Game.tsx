@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useGameSounds } from "@freegamestore/games";
 import type { GameMode } from "../types";
 import { getTodaysWord, getRandomWord, isValidGuess } from "../lib/words";
 
@@ -61,6 +62,9 @@ function evaluateGuess(guess: string, answer: string): LetterStatus[] {
 }
 
 export function Game({ onScore, onGameOver }: GameProps) {
+  const sounds = useGameSounds();
+  const soundsRef = useRef(sounds);
+  soundsRef.current = sounds;
   const [mode, setMode] = useState<GameMode | null>(null);
   const [answer, setAnswer] = useState("");
   const [guesses, setGuesses] = useState<TileData[][]>([]);
@@ -132,6 +136,7 @@ export function Game({ onScore, onGameOver }: GameProps) {
     setCurrentGuess("");
     setRevealingRow(newGuesses.length - 1);
     setTimeout(() => setRevealingRow(-1), WORD_LENGTH * 150 + 300);
+    soundsRef.current.playTick();
 
     const won = currentGuess === answer;
     if (won) {
@@ -140,6 +145,7 @@ export function Game({ onScore, onGameOver }: GameProps) {
         const score = 7 - newGuesses.length;
         onScore(score);
         showMessage(`You won in ${newGuesses.length}!`, 3000);
+        soundsRef.current.playLevelUp();
         onGameOver();
       }, WORD_LENGTH * 150 + 400);
     } else if (newGuesses.length >= MAX_GUESSES) {
@@ -147,6 +153,7 @@ export function Game({ onScore, onGameOver }: GameProps) {
         setGameLost(true);
         onScore(0);
         showMessage(answer.toUpperCase(), 5000);
+        soundsRef.current.playGameOver();
         onGameOver();
       }, WORD_LENGTH * 150 + 400);
     }
