@@ -69,14 +69,14 @@ export default function App() {
     <GameShell
       topbar={
         <GameTopbar
-          title="Wordle"
+          title="Five-Letter Word"
           stats={[
             { label: "Streak", value: streak },
             { label: "Best", value: bestScore },
           ]}
           rules={
             <div>
-              <h3 style={{marginBottom:'0.5rem',fontWeight:700}}>Wordle</h3>
+              <h3 style={{marginBottom:'0.5rem',fontWeight:700}}>Five-Letter Word</h3>
               <p>Guess the 5-letter word in 6 tries.</p>
               <h4 style={{marginTop:'0.75rem',fontWeight:600}}>Controls</h4>
               <ul style={{paddingLeft:'1.2rem',marginTop:'0.25rem'}}>
@@ -85,8 +85,8 @@ export default function App() {
               </ul>
               <h4 style={{marginTop:'0.75rem',fontWeight:600}}>Color Hints</h4>
               <ul style={{paddingLeft:'1.2rem',marginTop:'0.25rem'}}>
-                <li>Green = right letter, right spot</li>
-                <li>Yellow = right letter, wrong spot</li>
+                <li>Blue = right letter, right spot</li>
+                <li>Amber = right letter, wrong spot</li>
                 <li>Gray = letter not in the word</li>
               </ul>
             </div>

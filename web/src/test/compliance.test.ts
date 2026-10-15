@@ -102,6 +102,20 @@ describe("FreeGameStore compliance", () => {
     });
   });
 
+  describe("trade dress", () => {
+    it("index.html title and vite manifest do not use the Wordle name", () => {
+      expect(read("index.html")).not.toMatch(/wordle/i);
+      expect(read("vite.config.ts")).not.toMatch(/name: '[^']*wordle/i);
+    });
+
+    it("tile colours do not use the NYT Wordle palette", () => {
+      const game = read("src/components/Game.tsx");
+      for (const nyt of ["#6aaa64", "#c9b458", "#787c7e"]) {
+        expect(game).not.toContain(nyt);
+      }
+    });
+  });
+
   describe("project structure", () => {
     it("has LICENSE at root", () => {
       expect(exists(resolve(ROOT, "LICENSE"))).toBe(true);

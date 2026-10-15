@@ -1,4 +1,4 @@
-# Wordle
+# Five-Letter Word
 
 A free game on FreeGameStore.
 

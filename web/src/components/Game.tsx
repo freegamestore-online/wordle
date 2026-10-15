@@ -19,9 +19,9 @@ const MAX_GUESSES = 6;
 const WORD_LENGTH = 5;
 
 const STATUS_COLORS: Record<LetterStatus, string> = {
-  correct: "#16a34a",
-  present: "#d97706",
-  absent: "#6b7280",
+  correct: "var(--accent)",
+  present: "var(--warning)",
+  absent: "var(--muted)",
   empty: "var(--line)",
   tbd: "var(--line-strong)",
 };
