@@ -25,9 +25,9 @@ interface TileData {
 const REVEAL_MS = WORD_LENGTH * 150 + 400;
 
 const STATUS_COLORS: Record<TileStatus, string> = {
-  correct: "var(--accent)",
-  present: "var(--warning)",
-  absent: "var(--muted)",
+  correct: "var(--tile-correct)",
+  present: "var(--tile-present)",
+  absent: "var(--tile-absent)",
   empty: "var(--line)",
   tbd: "var(--line-strong)",
 };
@@ -233,7 +233,7 @@ export function Game({ answer, initialGuesses, hardMode, onGuess, onGameOver }: 
                           : "transparent",
                       color:
                         tile.status !== "empty" && tile.status !== "tbd"
-                          ? "#fff"
+                          ? "var(--tile-text)"
                           : "var(--ink)",
                       transition: isRevealing
                         ? `background ${150}ms ease ${delay}ms, border ${150}ms ease ${delay}ms, color ${150}ms ease ${delay}ms`
@@ -277,7 +277,7 @@ export function Game({ answer, initialGuesses, hardMode, onGuess, onGameOver }: 
                     background: status
                       ? STATUS_COLORS[status]
                       : "var(--line)",
-                    color: status ? "#fff" : "var(--ink)",
+                    color: status ? "var(--tile-text)" : "var(--ink)",
                     transition: "background 200ms ease",
                     WebkitTapHighlightColor: "transparent",
                     touchAction: "manipulation",

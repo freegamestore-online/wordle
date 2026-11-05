@@ -115,4 +115,29 @@ describe("App", { timeout: 20_000 }, () => {
     type("aback");
     expect(board().slice(0, 2)).toEqual(["abbey", "aback"]);
   });
+
+  it("rolls an unstarted daily over to the new day at midnight UTC in an open tab", () => {
+    vi.setSystemTime(new Date(`${TODAY}T23:59:50Z`));
+    render(<App />);
+    act(() => vi.advanceTimersByTime(60_000));
+    const next = screen.getByRole("button", { name: `Daily #${dayNumber(TODAY) + 1}` });
+    expect(next).toHaveAttribute("aria-pressed", "true");
+    for (const ch of dailyWord(dayNumber(TODAY) + 1)) fireEvent.keyDown(window, { key: ch });
+    fireEvent.keyDown(window, { key: "Enter" });
+    act(() => vi.advanceTimersByTime(2000));
+    expect(screen.getByText("You got it in 1!")).toBeInTheDocument();
+  });
+
+  it("keeps a daily in progress at midnight, and rolls over once its result is closed", () => {
+    vi.setSystemTime(new Date(`${TODAY}T23:59:00Z`));
+    render(<App />);
+    type(wrong);
+    act(() => vi.advanceTimersByTime(120_000));
+    expect(board()[0]).toBe(wrong);
+    type(answer);
+    expect(screen.getByText("You got it in 2!")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /close/i }));
+    expect(board()[0]).toBe("");
+    expect(screen.getByRole("button", { name: `Daily #${dayNumber(TODAY) + 1}` })).toHaveAttribute("aria-pressed", "true");
+  });
 });

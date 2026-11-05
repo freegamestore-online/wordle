@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { GameShell, GameTopbar, GameAuth, GameButton, GameModal } from "@freegamestore/games";
 import { Game } from "./components/Game";
 import { StatsPanel } from "./components/StatsPanel";
@@ -23,6 +23,8 @@ interface Round {
   answer: string;
   guesses: string[];
   hardMode: boolean;
+  /** The board is finished and its last row has revealed. */
+  over: boolean;
 }
 
 let nextRoundId = 0;
@@ -32,26 +34,40 @@ const hardModePreference = () => readStore(HARD_MODE_KEY) === "1";
 function dailyRound(): Round {
   const date = dateKey();
   const saved = loadDailySave(readStore(DAILY_SAVE_KEY), date);
+  const answer = dailyWord(dayNumber(date));
+  const guesses = saved?.guesses ?? [];
   return {
     id: nextRoundId++,
     mode: "daily",
     date,
-    answer: dailyWord(dayNumber(date)),
+    answer,
+    guesses,
     // A daily already started keeps the mode it was started in.
-    guesses: saved?.guesses ?? [],
     hardMode: saved?.guesses.length ? saved.hardMode : hardModePreference(),
+    over: isFinished(guesses, answer),
   };
 }
 
 function practiceRound(): Round {
-  return { id: nextRoundId++, mode: "practice", date: dateKey(), answer: randomWord(), guesses: [], hardMode: hardModePreference() };
+  return { id: nextRoundId++, mode: "practice", date: dateKey(), answer: randomWord(), guesses: [], hardMode: hardModePreference(), over: false };
+}
+
+/** Today's UTC date, kept current in an open tab so the daily rolls over at midnight UTC. */
+function useUtcDate(): string {
+  const [today, setToday] = useState(() => dateKey());
+  useEffect(() => {
+    const id = setInterval(() => setToday(dateKey()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  return today;
 }
 
 export default function App() {
+  const today = useUtcDate();
   const [round, setRound] = useState(dailyRound);
   const [stats, setStats] = useState(() => loadStats(readStore(STATS_KEY)));
   // A daily already finished today opens on its result.
-  const [resultOpen, setResultOpen] = useState(() => isFinished(round.guesses, round.answer));
+  const [resultOpen, setResultOpen] = useState(round.over);
   const [copied, setCopied] = useState<"" | "Copied!" | "Could not copy">("");
   const { submitScore } = useLeaderboard("wordle");
 
@@ -92,10 +108,15 @@ export default function App() {
     setResultOpen(true);
   }, []);
 
+  const gameOver = useCallback(() => {
+    setRound((r) => ({ ...r, over: true }));
+    openResult();
+  }, [openResult]);
+
   const startDaily = useCallback(() => {
     const next = dailyRound();
     setRound(next);
-    if (isFinished(next.guesses, next.answer)) openResult();
+    if (next.over) openResult();
     else setResultOpen(false);
   }, [openResult]);
 
@@ -106,7 +127,13 @@ export default function App() {
 
   const finished = isFinished(round.guesses, round.answer);
   const won = round.guesses.includes(round.answer);
-  const today = dateKey();
+
+  // After midnight UTC, move an open daily to the new day once it is not mid-game
+  // (unstarted, or over and its result closed).
+  const stale = round.mode === "daily" && round.date !== today && (round.guesses.length === 0 || (round.over && !resultOpen));
+  useEffect(() => {
+    if (stale) startDaily();
+  }, [stale, startDaily]);
   const puzzleTitle = round.mode === "daily" ? `${TITLE} #${dayNumber(round.date)}` : `${TITLE} practice`;
 
   const share = async () => {
@@ -202,7 +229,7 @@ export default function App() {
             initialGuesses={round.guesses}
             onGuess={handleGuess}
             hardMode={round.hardMode}
-            onGameOver={openResult}
+            onGameOver={gameOver}
           />
         </div>
       </div>

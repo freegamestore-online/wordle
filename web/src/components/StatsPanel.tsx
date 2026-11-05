@@ -36,8 +36,8 @@ export function StatsPanel({ stats, streak, highlight }: StatsPanelProps) {
                 className="rounded px-1.5 text-right font-bold"
                 style={{
                   width: `${Math.max(8, (n / most) * 100)}%`,
-                  background: highlight === i + 1 ? "var(--accent)" : "var(--muted)",
-                  color: "#fff",
+                  background: highlight === i + 1 ? "var(--tile-correct)" : "var(--tile-absent)",
+                  color: "var(--tile-text)",
                 }}
               >
                 {n}

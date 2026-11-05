@@ -7,7 +7,7 @@
   --paper: #ffffff;
   --bg: var(--paper);
   --ink: #1a1a1a;
-  --muted: #6b7280;
+  --muted: #4b5563;
   --line: #e5e7eb;
   --line-strong: #d1d5db;
   --panel: #f9fafb;
@@ -22,12 +22,20 @@
   /* Accent */
   --accent: #2563eb;
 
+  /* Scored tiles and keys, the same in both themes: white text on each is WCAG AA (4.5:1 or more). */
+  --tile-correct: #2563eb;
+  --tile-present: #b45309;
+  --tile-absent: #6b7280;
+  --tile-text: #ffffff;
+
   /* Fonts */
   font-family: "Manrope", system-ui, sans-serif;
 }
 
+/* Dark: follows the system, or the SDK theme toggle (which sets data-theme="dark"). */
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark;
     --paper: #0f0f0f;
     --bg: var(--paper);
     --ink: #f5f5f5;
@@ -41,7 +49,26 @@
     --success: #22c55e;
     --warning: #fbbf24;
     --error: #ef4444;
+    --accent: #60a5fa;
   }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --paper: #0f0f0f;
+  --bg: var(--paper);
+  --ink: #f5f5f5;
+  --muted: #9ca3af;
+  --line: #2d2d2d;
+  --line-strong: #404040;
+  --panel: #1a1a1a;
+  --glass: rgba(15, 15, 15, 0.8);
+  --dock: #1a1a1a;
+
+  --success: #22c55e;
+  --warning: #fbbf24;
+  --error: #ef4444;
+  --accent: #60a5fa;
 }
 
 html { height: 100%; overflow: hidden; }
