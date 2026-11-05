@@ -7,7 +7,7 @@ import type { GameMode } from "./types";
 import { dailyWord, randomWord } from "./lib/words";
 import { dateKey, dayNumber, loadDailySave, DAILY_SAVE_KEY } from "./lib/daily";
 import { isFinished, MAX_GUESSES } from "./lib/rules";
-import { loadStats, recordDaily, recordPractice, streakOn, STATS_KEY, type Stats } from "./lib/stats";
+import { loadStats, recordDaily, recordPractice, streakOn, STATS_KEY } from "./lib/stats";
 import { readStore, writeStore } from "./lib/storage";
 import { shareText } from "./lib/share";
 
@@ -71,14 +71,6 @@ export default function App() {
   const [copied, setCopied] = useState<"" | "Copied!" | "Could not copy">("");
   const { submitScore } = useLeaderboard("wordle");
 
-  const saveStats = useCallback((update: (s: Stats) => Stats) => {
-    setStats((prev) => {
-      const next = update(prev);
-      writeStore(STATS_KEY, JSON.stringify(next));
-      return next;
-    });
-  }, []);
-
   const handleGuess = useCallback(
     (guesses: string[]) => {
       setRound((r) => ({ ...r, guesses }));
@@ -88,20 +80,20 @@ export default function App() {
       if (!isFinished(guesses, round.answer)) return;
       const won = guesses.includes(round.answer);
       const n = guesses.length;
-      saveStats((s) => (round.mode === "daily" ? recordDaily(s, round.date, won, n) : recordPractice(s, won, n)));
+      const next = round.mode === "daily" ? recordDaily(stats, round.date, won, n) : recordPractice(stats, won, n);
+      setStats(next);
+      writeStore(STATS_KEY, JSON.stringify(next));
       if (won) submitScore(MAX_GUESSES + 1 - n);
     },
-    [round.mode, round.date, round.answer, round.hardMode, saveStats, submitScore],
+    [round.mode, round.date, round.answer, round.hardMode, stats, submitScore],
   );
 
   // Hard mode can only change before the first guess of a board.
   const toggleHardMode = useCallback(() => {
-    setRound((r) => {
-      if (r.guesses.length) return r;
-      writeStore(HARD_MODE_KEY, r.hardMode ? "0" : "1");
-      return { ...r, hardMode: !r.hardMode };
-    });
-  }, []);
+    if (round.guesses.length) return;
+    writeStore(HARD_MODE_KEY, round.hardMode ? "0" : "1");
+    setRound({ ...round, hardMode: !round.hardMode });
+  }, [round]);
 
   const openResult = useCallback(() => {
     setCopied("");

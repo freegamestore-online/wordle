@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateGuess, hardModeError, isFinished } from "./rules";
+import { evaluateGuess, hardModeError, isFinished, letterStatuses } from "./rules";
 
 describe("evaluateGuess", () => {
   it("marks right spot, wrong spot and absent letters", () => {
@@ -42,5 +42,20 @@ describe("hardModeError", () => {
     // geese vs eerie: e present, e correct (2nd), e correct (5th) -> three e's needed.
     expect(hardModeError("there", ["geese"], "eerie")).toBe("2nd letter must be E");
     expect(hardModeError("eerie", ["geese"], "eerie")).toBeNull();
+  });
+});
+
+describe("letterStatuses", () => {
+  it("keeps the best status a letter has shown: correct over present over absent", () => {
+    const keys = letterStatuses(["crane", "carts"], "cargo");
+    expect(keys.get("c")).toBe("correct");
+    expect(keys.get("a")).toBe("correct");
+    expect(keys.get("r")).toBe("correct");
+    expect(keys.get("n")).toBe("absent");
+    expect(keys.has("z")).toBe(false);
+  });
+
+  it("does not downgrade a letter once it has been found", () => {
+    expect(letterStatuses(["cargo", "crane"], "cargo").get("a")).toBe("correct");
   });
 });

@@ -58,3 +58,17 @@ export function hardModeError(guess: string, previous: readonly string[], answer
   }
   return null;
 }
+
+const RANK: Record<LetterStatus, number> = { absent: 0, present: 1, correct: 2 };
+
+/** The best status each letter has shown across scored guesses, for colouring the keyboard. */
+export function letterStatuses(guesses: readonly string[], answer: string): Map<string, LetterStatus> {
+  const map = new Map<string, LetterStatus>();
+  for (const guess of guesses) {
+    evaluateGuess(guess, answer).forEach((status, i) => {
+      const existing = map.get(guess[i]!);
+      if (!existing || RANK[status] > RANK[existing]) map.set(guess[i]!, status);
+    });
+  }
+  return map;
+}

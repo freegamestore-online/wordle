@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useGameSounds } from "@freegamestore/games";
 import { isValidGuess } from "../lib/words";
-import { evaluateGuess, hardModeError, isFinished, MAX_GUESSES, WORD_LENGTH, type LetterStatus } from "../lib/rules";
+import { evaluateGuess, hardModeError, isFinished, letterStatuses, MAX_GUESSES, WORD_LENGTH, type LetterStatus } from "../lib/rules";
 
 interface GameProps {
   answer: string;
@@ -57,20 +57,7 @@ export function Game({ answer, initialGuesses, hardMode, onGuess, onGameOver }: 
     [guesses, answer],
   );
 
-  // Keyboard colours. Priority: correct > present > absent.
-  const keyboardStatus = useMemo(() => {
-    const map = new Map<string, LetterStatus>();
-    for (const row of rows) {
-      for (const { letter, status } of row) {
-        const key = letter.toUpperCase();
-        const existing = map.get(key);
-        if (!existing || status === "correct" || (status === "present" && existing === "absent")) {
-          map.set(key, status);
-        }
-      }
-    }
-    return map;
-  }, [rows]);
+  const keyboardStatus = useMemo(() => letterStatuses(guesses, answer), [guesses, answer]);
 
   const showMessage = useCallback((msg: string, duration = 1500) => {
     clearTimeout(messageTimer.current);
@@ -215,6 +202,7 @@ export function Game({ answer, initialGuesses, hardMode, onGuess, onGameOver }: 
               {row.map((tile, colIndex) => {
                 const isRevealing = revealingRow === rowIndex;
                 const delay = colIndex * 150;
+                const scored = tile.status !== "empty" && tile.status !== "tbd";
                 return (
                   <div
                     key={colIndex}
@@ -223,18 +211,9 @@ export function Game({ answer, initialGuesses, hardMode, onGuess, onGameOver }: 
                       width: TILE_SIZE,
                       height: TILE_SIZE,
                       borderRadius: "0.25rem",
-                      border:
-                        tile.status === "empty" || tile.status === "tbd"
-                          ? `2px solid ${STATUS_COLORS[tile.status]}`
-                          : "none",
-                      background:
-                        tile.status !== "empty" && tile.status !== "tbd"
-                          ? STATUS_COLORS[tile.status]
-                          : "transparent",
-                      color:
-                        tile.status !== "empty" && tile.status !== "tbd"
-                          ? "var(--tile-text)"
-                          : "var(--ink)",
+                      border: scored ? "none" : `2px solid ${STATUS_COLORS[tile.status]}`,
+                      background: scored ? STATUS_COLORS[tile.status] : "transparent",
+                      color: scored ? "var(--tile-text)" : "var(--ink)",
                       transition: isRevealing
                         ? `background ${150}ms ease ${delay}ms, border ${150}ms ease ${delay}ms, color ${150}ms ease ${delay}ms`
                         : "none",
@@ -259,7 +238,7 @@ export function Game({ answer, initialGuesses, hardMode, onGuess, onGameOver }: 
         {KEYBOARD_ROWS.map((row, rowIndex) => (
           <div key={rowIndex} className="flex justify-center gap-1">
             {row.map((key) => {
-              const status = keyboardStatus.get(key);
+              const status = keyboardStatus.get(key.toLowerCase());
               const isWide = key === "ENTER" || key === "BACK";
               return (
                 <button
