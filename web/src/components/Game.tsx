@@ -1,24 +1,28 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useGameSounds } from "@freegamestore/games";
-import type { GameMode } from "../types";
-import { getTodaysWord, getRandomWord, isValidGuess } from "../lib/words";
+import { isValidGuess } from "../lib/words";
+import { evaluateGuess, isFinished, MAX_GUESSES, WORD_LENGTH, type LetterStatus } from "../lib/rules";
 
 interface GameProps {
-  onScore: (s: number) => void;
+  answer: string;
+  /** Guesses already made, e.g. a restored daily board. */
+  initialGuesses: string[];
+  /** Called after every accepted guess with the whole board, so it can be saved and scored. */
+  onGuess: (guesses: string[]) => void;
+  /** Called once the last row has finished revealing. */
   onGameOver: () => void;
 }
 
-type LetterStatus = "correct" | "present" | "absent" | "empty" | "tbd";
+type TileStatus = LetterStatus | "empty" | "tbd";
 
 interface TileData {
   letter: string;
-  status: LetterStatus;
+  status: TileStatus;
 }
 
-const MAX_GUESSES = 6;
-const WORD_LENGTH = 5;
+const REVEAL_MS = WORD_LENGTH * 150 + 400;
 
-const STATUS_COLORS: Record<LetterStatus, string> = {
+const STATUS_COLORS: Record<TileStatus, string> = {
   correct: "var(--accent)",
   present: "var(--warning)",
   absent: "var(--muted)",
@@ -32,152 +36,103 @@ const KEYBOARD_ROWS = [
   ["ENTER", "Z", "X", "C", "V", "B", "N", "M", "BACK"],
 ];
 
-function evaluateGuess(guess: string, answer: string): LetterStatus[] {
-  const result: LetterStatus[] = Array(WORD_LENGTH).fill("absent") as LetterStatus[];
-  const answerChars = answer.split("");
-  const guessChars = guess.split("");
-  const used = Array(WORD_LENGTH).fill(false) as boolean[];
+const TILE_SIZE = "clamp(36px, min(12vw, 6.6svh), 62px)";
 
-  // First pass: correct positions
-  for (let i = 0; i < WORD_LENGTH; i++) {
-    if (guessChars[i] === answerChars[i]) {
-      result[i] = "correct";
-      used[i] = true;
-    }
-  }
-
-  // Second pass: present but wrong position
-  for (let i = 0; i < WORD_LENGTH; i++) {
-    if (result[i] === "correct") continue;
-    for (let j = 0; j < WORD_LENGTH; j++) {
-      if (!used[j] && guessChars[i] === answerChars[j]) {
-        result[i] = "present";
-        used[j] = true;
-        break;
-      }
-    }
-  }
-
-  return result;
-}
-
-export function Game({ onScore, onGameOver }: GameProps) {
+export function Game({ answer, initialGuesses, onGuess, onGameOver }: GameProps) {
   const sounds = useGameSounds();
   const soundsRef = useRef(sounds);
   soundsRef.current = sounds;
-  const [mode, setMode] = useState<GameMode | null>(null);
-  const [answer, setAnswer] = useState("");
-  const [guesses, setGuesses] = useState<TileData[][]>([]);
+  const [guesses, setGuesses] = useState<string[]>(initialGuesses);
   const [currentGuess, setCurrentGuess] = useState("");
-  const [gameWon, setGameWon] = useState(false);
-  const [gameLost, setGameLost] = useState(false);
   const [shake, setShake] = useState(false);
   const [message, setMessage] = useState("");
   const [revealingRow, setRevealingRow] = useState(-1);
-  const keyboardStatus = useRef<Map<string, LetterStatus>>(new Map());
+  const messageTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const over = isFinished(guesses, answer);
 
-  const startGame = useCallback((selectedMode: GameMode) => {
-    const word = selectedMode === "daily" ? getTodaysWord() : getRandomWord();
-    setMode(selectedMode);
-    setAnswer(word);
-    setGuesses([]);
-    setCurrentGuess("");
-    setGameWon(false);
-    setGameLost(false);
-    setMessage("");
-    setRevealingRow(-1);
-    keyboardStatus.current = new Map();
-  }, []);
+  const rows = useMemo(
+    () => guesses.map((g) => evaluateGuess(g, answer).map((status, i) => ({ letter: g[i]!, status }))),
+    [guesses, answer],
+  );
 
-  const showMessage = useCallback((msg: string, duration = 1500) => {
-    setMessage(msg);
-    setTimeout(() => setMessage(""), duration);
-  }, []);
-
-  const submitGuess = useCallback(() => {
-    if (gameWon || gameLost) return;
-    if (currentGuess.length !== WORD_LENGTH) {
-      setShake(true);
-      showMessage("Not enough letters");
-      setTimeout(() => setShake(false), 500);
-      return;
-    }
-
-    if (!isValidGuess(currentGuess)) {
-      setShake(true);
-      showMessage("Not in word list");
-      setTimeout(() => setShake(false), 500);
-      return;
-    }
-
-    const evaluation = evaluateGuess(currentGuess, answer);
-    const newRow: TileData[] = currentGuess.split("").map((letter, i) => ({
-      letter,
-      status: evaluation[i]!,
-    }));
-
-    // Update keyboard colors
-    for (let i = 0; i < WORD_LENGTH; i++) {
-      const letter = currentGuess[i]!.toUpperCase();
-      const newStatus = evaluation[i]!;
-      const existing = keyboardStatus.current.get(letter);
-      // Priority: correct > present > absent
-      if (
-        !existing ||
-        newStatus === "correct" ||
-        (newStatus === "present" && existing !== "correct")
-      ) {
-        keyboardStatus.current.set(letter, newStatus);
+  // Keyboard colours. Priority: correct > present > absent.
+  const keyboardStatus = useMemo(() => {
+    const map = new Map<string, LetterStatus>();
+    for (const row of rows) {
+      for (const { letter, status } of row) {
+        const key = letter.toUpperCase();
+        const existing = map.get(key);
+        if (!existing || status === "correct" || (status === "present" && existing === "absent")) {
+          map.set(key, status);
+        }
       }
     }
+    return map;
+  }, [rows]);
 
-    const newGuesses = [...guesses, newRow];
-    setGuesses(newGuesses);
+  const showMessage = useCallback((msg: string, duration = 1500) => {
+    clearTimeout(messageTimer.current);
+    setMessage(msg);
+    messageTimer.current = setTimeout(() => setMessage(""), duration);
+  }, []);
+
+  useEffect(() => () => clearTimeout(messageTimer.current), []);
+
+  const reject = useCallback(
+    (msg: string) => {
+      setShake(true);
+      showMessage(msg);
+      setTimeout(() => setShake(false), 500);
+    },
+    [showMessage],
+  );
+
+  const submitGuess = useCallback(() => {
+    if (over) return;
+    if (currentGuess.length !== WORD_LENGTH) return reject("Not enough letters");
+    if (!isValidGuess(currentGuess)) return reject("Not in word list");
+
+    const next = [...guesses, currentGuess];
+    setGuesses(next);
     setCurrentGuess("");
-    setRevealingRow(newGuesses.length - 1);
-    setTimeout(() => setRevealingRow(-1), WORD_LENGTH * 150 + 300);
+    setRevealingRow(next.length - 1);
     soundsRef.current.playTick();
+    onGuess(next);
+  }, [over, currentGuess, guesses, reject, onGuess]);
 
-    const won = currentGuess === answer;
-    if (won) {
-      setTimeout(() => {
-        setGameWon(true);
-        const score = 7 - newGuesses.length;
-        onScore(score);
-        showMessage(`You won in ${newGuesses.length}!`, 3000);
+  // When the last row has revealed, announce the result. Not on a board restored already finished.
+  useEffect(() => {
+    if (revealingRow < 0) return;
+    const timer = setTimeout(() => {
+      setRevealingRow(-1);
+      if (!isFinished(guesses, answer)) return;
+      if (guesses.includes(answer)) {
+        showMessage(`You won in ${guesses.length}!`, 3000);
         soundsRef.current.playLevelUp();
-        onGameOver();
-      }, WORD_LENGTH * 150 + 400);
-    } else if (newGuesses.length >= MAX_GUESSES) {
-      setTimeout(() => {
-        setGameLost(true);
-        onScore(0);
+      } else {
         showMessage(answer.toUpperCase(), 5000);
         soundsRef.current.playGameOver();
-        onGameOver();
-      }, WORD_LENGTH * 150 + 400);
-    }
-  }, [currentGuess, answer, guesses, gameWon, gameLost, onScore, onGameOver, showMessage]);
+      }
+      onGameOver();
+    }, REVEAL_MS);
+    return () => clearTimeout(timer);
+  }, [revealingRow, guesses, answer, showMessage, onGameOver]);
 
   const addLetter = useCallback(
     (letter: string) => {
-      if (gameWon || gameLost) return;
-      if (currentGuess.length < WORD_LENGTH) {
-        setCurrentGuess((prev) => prev + letter.toLowerCase());
-      }
+      if (over) return;
+      setCurrentGuess((prev) => (prev.length < WORD_LENGTH ? prev + letter.toLowerCase() : prev));
     },
-    [currentGuess, gameWon, gameLost],
+    [over],
   );
 
   const deleteLetter = useCallback(() => {
-    if (gameWon || gameLost) return;
+    if (over) return;
     setCurrentGuess((prev) => prev.slice(0, -1));
-  }, [gameWon, gameLost]);
+  }, [over]);
 
   // Physical keyboard handler
   useEffect(() => {
-    if (!mode) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === "Enter") {
@@ -193,7 +148,7 @@ export function Game({ onScore, onGameOver }: GameProps) {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [mode, submitGuess, addLetter, deleteLetter]);
+  }, [submitGuess, addLetter, deleteLetter]);
 
   const handleKeyTap = useCallback(
     (key: string) => {
@@ -208,45 +163,12 @@ export function Game({ onScore, onGameOver }: GameProps) {
     [submitGuess, addLetter, deleteLetter],
   );
 
-  // Mode selection screen
-  if (!mode) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-6 p-4">
-        <h2
-          className="text-3xl font-bold"
-          style={{ fontFamily: "Fraunces, serif" }}
-        >
-          Choose Mode
-        </h2>
-        <div className="flex gap-4">
-          <button
-            onClick={() => startGame("daily")}
-            className="px-6 py-3 rounded-xl font-semibold min-h-[2.75rem]"
-            style={{ background: "var(--accent)", color: "#fff" }}
-          >
-            Daily
-          </button>
-          <button
-            onClick={() => startGame("practice")}
-            className="px-6 py-3 rounded-xl font-semibold min-h-[2.75rem]"
-            style={{ background: "var(--success)", color: "#fff" }}
-          >
-            Practice
-          </button>
-        </div>
-        <p className="text-sm" style={{ color: "var(--muted)" }}>
-          Daily: same word for everyone today. Practice: random word each time.
-        </p>
-      </div>
-    );
-  }
-
   // Build the grid rows
   const gridRows: TileData[][] = [];
   for (let i = 0; i < MAX_GUESSES; i++) {
-    if (i < guesses.length) {
-      gridRows.push(guesses[i]!);
-    } else if (i === guesses.length) {
+    if (i < rows.length) {
+      gridRows.push(rows[i]!);
+    } else if (i === rows.length && !over) {
       // Current guess row
       const row: TileData[] = [];
       for (let j = 0; j < WORD_LENGTH; j++) {
@@ -259,9 +181,7 @@ export function Game({ onScore, onGameOver }: GameProps) {
       gridRows.push(row);
     } else {
       // Empty future row
-      gridRows.push(
-        Array.from({ length: WORD_LENGTH }, () => ({ letter: "", status: "empty" as LetterStatus })),
-      );
+      gridRows.push(Array.from({ length: WORD_LENGTH }, () => ({ letter: "", status: "empty" as const })));
     }
   }
 
@@ -282,7 +202,7 @@ export function Game({ onScore, onGameOver }: GameProps) {
 
       {/* Grid */}
       <div className="flex-1 flex items-center justify-center p-2">
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" data-testid="board">
           {gridRows.map((row, rowIndex) => (
             <div
               key={rowIndex}
@@ -296,8 +216,8 @@ export function Game({ onScore, onGameOver }: GameProps) {
                     key={colIndex}
                     className="flex items-center justify-center font-bold text-xl uppercase"
                     style={{
-                      width: "clamp(48px, 12vw, 62px)",
-                      height: "clamp(48px, 12vw, 62px)",
+                      width: TILE_SIZE,
+                      height: TILE_SIZE,
                       borderRadius: "0.25rem",
                       border:
                         tile.status === "empty" || tile.status === "tbd"
@@ -314,9 +234,6 @@ export function Game({ onScore, onGameOver }: GameProps) {
                       transition: isRevealing
                         ? `background ${150}ms ease ${delay}ms, border ${150}ms ease ${delay}ms, color ${150}ms ease ${delay}ms`
                         : "none",
-                      transform: isRevealing
-                        ? undefined
-                        : undefined,
                       animation: isRevealing
                         ? `flip 300ms ease ${delay}ms`
                         : tile.status === "tbd" && tile.letter
@@ -338,11 +255,14 @@ export function Game({ onScore, onGameOver }: GameProps) {
         {KEYBOARD_ROWS.map((row, rowIndex) => (
           <div key={rowIndex} className="flex justify-center gap-1">
             {row.map((key) => {
-              const status = keyboardStatus.current.get(key);
+              const status = keyboardStatus.get(key);
               const isWide = key === "ENTER" || key === "BACK";
               return (
                 <button
                   key={key}
+                  aria-label={key === "BACK" ? "Backspace" : key === "ENTER" ? "Enter" : key}
+                  // Keep focus off the key, so physical Enter or Space never re-presses it.
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => handleKeyTap(key)}
                   className="flex items-center justify-center font-bold rounded-md"
                   style={{
