@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateGuess, isFinished } from "./rules";
+import { evaluateGuess, hardModeError, isFinished } from "./rules";
 
 describe("evaluateGuess", () => {
   it("marks right spot, wrong spot and absent letters", () => {
@@ -17,5 +17,30 @@ describe("isFinished", () => {
     expect(isFinished(["crane"], "crane")).toBe(true);
     expect(isFinished(["slate"], "crane")).toBe(false);
     expect(isFinished(Array(6).fill("slate"), "crane")).toBe(true);
+  });
+});
+
+describe("hardModeError", () => {
+  it("allows anything before the first guess", () => {
+    expect(hardModeError("zebra", [], "crane")).toBeNull();
+  });
+
+  it("keeps letters revealed in the right spot", () => {
+    // crate vs crane: c, r, a, e correct.
+    expect(hardModeError("brace", ["crate"], "crane")).toBe("1st letter must be C");
+    expect(hardModeError("craze", ["crate"], "crane")).toBeNull();
+  });
+
+  it("reuses letters revealed in the word", () => {
+    // salon vs crane: a and n are in the word, elsewhere.
+    expect(hardModeError("beach", ["salon"], "crane")).toBe("Guess must contain N");
+    expect(hardModeError("hymns", ["salon"], "crane")).toBe("Guess must contain A");
+    expect(hardModeError("chant", ["salon"], "crane")).toBeNull();
+  });
+
+  it("needs a repeated letter as often as it was revealed", () => {
+    // geese vs eerie: e present, e correct (2nd), e correct (5th) -> three e's needed.
+    expect(hardModeError("there", ["geese"], "eerie")).toBe("2nd letter must be E");
+    expect(hardModeError("eerie", ["geese"], "eerie")).toBeNull();
   });
 });

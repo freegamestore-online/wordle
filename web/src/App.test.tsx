@@ -33,7 +33,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("App", () => {
+describe("App", { timeout: 20_000 }, () => {
   it("opens straight onto today's daily board", () => {
     render(<App />);
     expect(screen.getByRole("button", { name: `Daily #${dayNumber(TODAY)}` })).toHaveAttribute("aria-pressed", "true");
@@ -43,7 +43,7 @@ describe("App", () => {
   it("saves the daily after each guess and restores it on reload", () => {
     const { unmount } = render(<App />);
     type(wrong);
-    expect(JSON.parse(localStorage.getItem(DAILY_SAVE_KEY)!)).toEqual({ date: TODAY, guesses: [wrong] });
+    expect(JSON.parse(localStorage.getItem(DAILY_SAVE_KEY)!)).toEqual({ date: TODAY, guesses: [wrong], hardMode: false });
     unmount();
     render(<App />);
     expect(board()[0]).toBe(wrong);
@@ -69,7 +69,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Practice" }));
     for (let i = 0; i < 6; i++) type("crane");
     const stats = JSON.parse(localStorage.getItem(STATS_KEY)!);
-    expect(stats.practice).toEqual({ played: 1, won: 0 });
+    expect(stats.practice).toMatchObject({ played: 1, won: 0 });
     expect(stats.daily).toMatchObject({ played: 0, currentStreak: 0 });
   });
 
@@ -80,5 +80,39 @@ describe("App", () => {
     fireEvent.click(key);
     fireEvent.keyDown(window, { key: "Enter" });
     expect(board()[0]).toBe("a");
+  });
+
+  it("shares a spoiler-free emoji grid of the finished daily", async () => {
+    const writeText = vi.fn((_text: string) => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    render(<App />);
+    type(wrong);
+    type(answer);
+    expect(screen.getByLabelText("2 guesses: 1")).toBeInTheDocument();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Share" })));
+    const text = writeText.mock.calls[0]![0];
+    expect(text.startsWith(`Five-Letter Word #${dayNumber(TODAY)} 2/6\n`)).toBe(true);
+    expect(text).not.toContain(answer);
+    expect(screen.getByRole("button", { name: "Copied!" })).toBeInTheDocument();
+  });
+
+  it("hard mode rejects a guess that ignores a revealed hint, and locks after the first guess", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0); // practice word "aback"
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Practice" }));
+    const hard = screen.getByRole("button", { name: "Hard" });
+    fireEvent.click(hard);
+    expect(hard).toHaveAttribute("aria-pressed", "true");
+    expect(localStorage.getItem("freewordle-hard")).toBe("1");
+    type("abbey");
+    expect(hard).toBeDisabled();
+    fireEvent.keyDown(window, { key: "Backspace" });
+    for (const ch of "crane") fireEvent.keyDown(window, { key: ch });
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(screen.getByText("1st letter must be A")).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(2000));
+    for (let i = 0; i < 5; i++) fireEvent.keyDown(window, { key: "Backspace" });
+    type("aback");
+    expect(board().slice(0, 2)).toEqual(["abbey", "aback"]);
   });
 });

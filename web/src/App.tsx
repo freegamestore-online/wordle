@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { GameShell, GameTopbar, GameAuth, GameButton, GameModal } from "@freegamestore/games";
 import { Game } from "./components/Game";
+import { StatsPanel } from "./components/StatsPanel";
 import { useLeaderboard } from '@freegamestore/games';
 import type { GameMode } from "./types";
 import { dailyWord, randomWord } from "./lib/words";
@@ -8,6 +9,10 @@ import { dateKey, dayNumber, loadDailySave, DAILY_SAVE_KEY } from "./lib/daily";
 import { isFinished, MAX_GUESSES } from "./lib/rules";
 import { loadStats, recordDaily, recordPractice, streakOn, STATS_KEY, type Stats } from "./lib/stats";
 import { readStore, writeStore } from "./lib/storage";
+import { shareText } from "./lib/share";
+
+const HARD_MODE_KEY = "freewordle-hard";
+const TITLE = "Five-Letter Word";
 
 interface Round {
   /** Changes for every new board, to remount the game. */
@@ -17,23 +22,29 @@ interface Round {
   date: string;
   answer: string;
   guesses: string[];
+  hardMode: boolean;
 }
 
 let nextRoundId = 0;
 
+const hardModePreference = () => readStore(HARD_MODE_KEY) === "1";
+
 function dailyRound(): Round {
   const date = dateKey();
+  const saved = loadDailySave(readStore(DAILY_SAVE_KEY), date);
   return {
     id: nextRoundId++,
     mode: "daily",
     date,
     answer: dailyWord(dayNumber(date)),
-    guesses: loadDailySave(readStore(DAILY_SAVE_KEY), date),
+    // A daily already started keeps the mode it was started in.
+    guesses: saved?.guesses ?? [],
+    hardMode: saved?.guesses.length ? saved.hardMode : hardModePreference(),
   };
 }
 
 function practiceRound(): Round {
-  return { id: nextRoundId++, mode: "practice", date: dateKey(), answer: randomWord(), guesses: [] };
+  return { id: nextRoundId++, mode: "practice", date: dateKey(), answer: randomWord(), guesses: [], hardMode: hardModePreference() };
 }
 
 export default function App() {
@@ -41,6 +52,7 @@ export default function App() {
   const [stats, setStats] = useState(() => loadStats(readStore(STATS_KEY)));
   // A daily already finished today opens on its result.
   const [resultOpen, setResultOpen] = useState(() => isFinished(round.guesses, round.answer));
+  const [copied, setCopied] = useState<"" | "Copied!" | "Could not copy">("");
   const { submitScore } = useLeaderboard("wordle");
 
   const saveStats = useCallback((update: (s: Stats) => Stats) => {
@@ -55,23 +67,37 @@ export default function App() {
     (guesses: string[]) => {
       setRound((r) => ({ ...r, guesses }));
       if (round.mode === "daily") {
-        writeStore(DAILY_SAVE_KEY, JSON.stringify({ date: round.date, guesses }));
+        writeStore(DAILY_SAVE_KEY, JSON.stringify({ date: round.date, guesses, hardMode: round.hardMode }));
       }
       if (!isFinished(guesses, round.answer)) return;
       const won = guesses.includes(round.answer);
-      saveStats((s) => (round.mode === "daily" ? recordDaily(s, round.date, won) : recordPractice(s, won)));
-      if (won) submitScore(MAX_GUESSES + 1 - guesses.length);
+      const n = guesses.length;
+      saveStats((s) => (round.mode === "daily" ? recordDaily(s, round.date, won, n) : recordPractice(s, won, n)));
+      if (won) submitScore(MAX_GUESSES + 1 - n);
     },
-    [round.mode, round.date, round.answer, saveStats, submitScore],
+    [round.mode, round.date, round.answer, round.hardMode, saveStats, submitScore],
   );
 
-  const handleGameOver = useCallback(() => setResultOpen(true), []);
+  // Hard mode can only change before the first guess of a board.
+  const toggleHardMode = useCallback(() => {
+    setRound((r) => {
+      if (r.guesses.length) return r;
+      writeStore(HARD_MODE_KEY, r.hardMode ? "0" : "1");
+      return { ...r, hardMode: !r.hardMode };
+    });
+  }, []);
+
+  const openResult = useCallback(() => {
+    setCopied("");
+    setResultOpen(true);
+  }, []);
 
   const startDaily = useCallback(() => {
     const next = dailyRound();
     setRound(next);
-    setResultOpen(isFinished(next.guesses, next.answer));
-  }, []);
+    if (isFinished(next.guesses, next.answer)) openResult();
+    else setResultOpen(false);
+  }, [openResult]);
 
   const startPractice = useCallback(() => {
     setRound(practiceRound());
@@ -81,6 +107,17 @@ export default function App() {
   const finished = isFinished(round.guesses, round.answer);
   const won = round.guesses.includes(round.answer);
   const today = dateKey();
+  const puzzleTitle = round.mode === "daily" ? `${TITLE} #${dayNumber(round.date)}` : `${TITLE} practice`;
+
+  const share = async () => {
+    const text = shareText({ title: puzzleTitle, guesses: round.guesses, answer: round.answer, hardMode: round.hardMode, url: window.location.origin });
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied("Copied!");
+    } catch {
+      setCopied("Could not copy");
+    }
+  };
 
   return (
     <GameShell
@@ -136,15 +173,27 @@ export default function App() {
               </button>
             ))}
           </div>
-          {finished && !resultOpen && (
-            <button
-              onClick={() => setResultOpen(true)}
-              className="px-3 rounded-md text-sm font-semibold"
-              style={{ minHeight: "2rem", color: "var(--accent)" }}
-            >
-              Result
-            </button>
-          )}
+          <button
+            aria-pressed={round.hardMode}
+            disabled={round.guesses.length > 0}
+            title={round.guesses.length > 0 ? "Hard mode can only change before the first guess" : "Revealed hints must be used"}
+            onClick={toggleHardMode}
+            className="px-2 rounded-md text-sm font-semibold disabled:opacity-60"
+            style={{
+              minHeight: "2rem",
+              border: `1px solid ${round.hardMode ? "var(--accent)" : "var(--line-strong)"}`,
+              color: round.hardMode ? "var(--accent)" : "var(--muted)",
+            }}
+          >
+            Hard
+          </button>
+          <button
+            onClick={openResult}
+            className="px-2 rounded-md text-sm font-semibold"
+            style={{ minHeight: "2rem", color: "var(--accent)" }}
+          >
+            Stats
+          </button>
         </div>
         <div className="flex-1 min-h-0">
           <Game
@@ -152,28 +201,45 @@ export default function App() {
             answer={round.answer}
             initialGuesses={round.guesses}
             onGuess={handleGuess}
-            onGameOver={handleGameOver}
+            hardMode={round.hardMode}
+            onGameOver={openResult}
           />
         </div>
       </div>
       <GameModal
-        open={resultOpen && finished}
+        open={resultOpen}
         onClose={() => setResultOpen(false)}
         title={round.mode === "daily" ? `Daily #${dayNumber(round.date)}` : "Practice"}
       >
         <div className="flex flex-col items-center gap-4 text-center">
-          <p
-            className="text-xl font-bold"
-            style={{ color: won ? "var(--success)" : "var(--error)", fontFamily: "Fraunces, serif" }}
-          >
-            {won ? `You got it in ${round.guesses.length}!` : `The word was ${round.answer.toUpperCase()}`}
-          </p>
-          {round.mode === "daily" && (
+          {finished && (
+            <p
+              className="text-xl font-bold"
+              style={{ color: won ? "var(--success)" : "var(--error)", fontFamily: "Fraunces, serif" }}
+            >
+              {won ? `You got it in ${round.guesses.length}!` : `The word was ${round.answer.toUpperCase()}`}
+            </p>
+          )}
+          <StatsPanel
+            stats={round.mode === "daily" ? stats.daily : stats.practice}
+            streak={round.mode === "daily" ? { current: streakOn(stats, today), best: stats.daily.bestStreak } : undefined}
+            highlight={finished && won ? round.guesses.length : undefined}
+          />
+          {round.mode === "daily" && finished && (
             <p className="text-sm" style={{ color: "var(--muted)" }}>
               A new daily word arrives at midnight UTC.
             </p>
           )}
-          <GameButton onClick={startPractice}>{round.mode === "daily" ? "Play practice" : "Play again"}</GameButton>
+          <div className="flex flex-wrap justify-center gap-2">
+            {finished && (
+              <GameButton variant="secondary" onClick={share}>
+                {copied || "Share"}
+              </GameButton>
+            )}
+            {(finished || round.mode === "daily") && (
+              <GameButton onClick={startPractice}>{round.mode === "daily" ? "Play practice" : "Play again"}</GameButton>
+            )}
+          </div>
         </div>
       </GameModal>
     </GameShell>

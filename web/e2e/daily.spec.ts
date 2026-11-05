@@ -27,6 +27,11 @@ test("fits the smallest supported phone", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByTestId("board")).toBeVisible();
   await assertNoScroll(page);
-  const keyboardBottom = await page.getByRole("button", { name: "Enter", exact: true }).evaluate((el) => el.getBoundingClientRect().bottom);
-  expect(keyboardBottom).toBeLessThanOrEqual(568);
+  // The whole keyboard is on screen, wide keys included.
+  for (const name of ["Enter", "Backspace", "Q", "P"]) {
+    const box = (await page.getByRole("button", { name, exact: true }).boundingBox())!;
+    expect(box.x, name).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width, name).toBeLessThanOrEqual(320);
+    expect(box.y + box.height, name).toBeLessThanOrEqual(568);
+  }
 });

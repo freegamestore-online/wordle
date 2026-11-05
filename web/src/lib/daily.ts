@@ -24,16 +24,18 @@ export const DAILY_SAVE_KEY = "freewordle-daily";
 export interface DailySave {
   date: string;
   guesses: string[];
+  hardMode: boolean;
 }
 
-/** The saved guesses for `date`, or none if the save is for another day or is damaged. */
-export function loadDailySave(raw: string | null, date: string): string[] {
-  if (!raw) return [];
+/** The saved board for `date`, or null if the save is for another day or is damaged. */
+export function loadDailySave(raw: string | null, date: string): DailySave | null {
+  if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as Partial<DailySave>;
-    if (parsed?.date !== date || !Array.isArray(parsed.guesses)) return [];
-    return parsed.guesses.filter((g): g is string => typeof g === "string" && /^[a-z]{5}$/.test(g)).slice(0, MAX_GUESSES);
+    if (parsed?.date !== date || !Array.isArray(parsed.guesses)) return null;
+    const guesses = parsed.guesses.filter((g): g is string => typeof g === "string" && /^[a-z]{5}$/.test(g));
+    return { date, guesses: guesses.slice(0, MAX_GUESSES), hardMode: parsed.hardMode === true };
   } catch {
-    return [];
+    return null;
   }
 }

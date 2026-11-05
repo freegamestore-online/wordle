@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useGameSounds } from "@freegamestore/games";
 import { isValidGuess } from "../lib/words";
-import { evaluateGuess, isFinished, MAX_GUESSES, WORD_LENGTH, type LetterStatus } from "../lib/rules";
+import { evaluateGuess, hardModeError, isFinished, MAX_GUESSES, WORD_LENGTH, type LetterStatus } from "../lib/rules";
 
 interface GameProps {
   answer: string;
   /** Guesses already made, e.g. a restored daily board. */
   initialGuesses: string[];
+  /** Revealed hints must be used in later guesses. */
+  hardMode: boolean;
   /** Called after every accepted guess with the whole board, so it can be saved and scored. */
   onGuess: (guesses: string[]) => void;
   /** Called once the last row has finished revealing. */
@@ -38,7 +40,7 @@ const KEYBOARD_ROWS = [
 
 const TILE_SIZE = "clamp(36px, min(12vw, 6.6svh), 62px)";
 
-export function Game({ answer, initialGuesses, onGuess, onGameOver }: GameProps) {
+export function Game({ answer, initialGuesses, hardMode, onGuess, onGameOver }: GameProps) {
   const sounds = useGameSounds();
   const soundsRef = useRef(sounds);
   soundsRef.current = sounds;
@@ -91,6 +93,8 @@ export function Game({ answer, initialGuesses, onGuess, onGameOver }: GameProps)
     if (over) return;
     if (currentGuess.length !== WORD_LENGTH) return reject("Not enough letters");
     if (!isValidGuess(currentGuess)) return reject("Not in word list");
+    const hardError = hardMode ? hardModeError(currentGuess, guesses, answer) : null;
+    if (hardError) return reject(hardError);
 
     const next = [...guesses, currentGuess];
     setGuesses(next);
@@ -98,7 +102,7 @@ export function Game({ answer, initialGuesses, onGuess, onGameOver }: GameProps)
     setRevealingRow(next.length - 1);
     soundsRef.current.playTick();
     onGuess(next);
-  }, [over, currentGuess, guesses, reject, onGuess]);
+  }, [over, currentGuess, guesses, hardMode, answer, reject, onGuess]);
 
   // When the last row has revealed, announce the result. Not on a board restored already finished.
   useEffect(() => {
@@ -267,7 +271,7 @@ export function Game({ answer, initialGuesses, onGuess, onGameOver }: GameProps)
                   className="flex items-center justify-center font-bold rounded-md"
                   style={{
                     minHeight: "48px",
-                    minWidth: isWide ? "56px" : "28px",
+                    minWidth: 0,
                     flex: isWide ? "1.5" : "1",
                     fontSize: isWide ? "11px" : "14px",
                     background: status

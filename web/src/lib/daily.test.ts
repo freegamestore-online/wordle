@@ -18,24 +18,30 @@ describe("daily dates", () => {
 });
 
 describe("saved daily board", () => {
-  const save = (date: string, guesses: unknown) => JSON.stringify({ date, guesses });
+  const save = (date: string, guesses: unknown, hardMode?: boolean) => JSON.stringify({ date, guesses, hardMode });
+  const guessesOf = (raw: string | null) => loadDailySave(raw, "2026-11-05")?.guesses;
 
-  it("restores today's guesses", () => {
-    expect(loadDailySave(save("2026-11-05", ["crane", "slate"]), "2026-11-05")).toEqual(["crane", "slate"]);
+  it("restores today's guesses and hard mode", () => {
+    expect(loadDailySave(save("2026-11-05", ["crane", "slate"], true), "2026-11-05")).toEqual({
+      date: "2026-11-05",
+      guesses: ["crane", "slate"],
+      hardMode: true,
+    });
+    expect(loadDailySave(save("2026-11-05", ["crane"]), "2026-11-05")?.hardMode).toBe(false);
   });
 
   it("starts fresh on a new day", () => {
-    expect(loadDailySave(save("2026-11-04", ["crane"]), "2026-11-05")).toEqual([]);
+    expect(loadDailySave(save("2026-11-04", ["crane"]), "2026-11-05")).toBeNull();
   });
 
   it("ignores missing or damaged saves", () => {
-    expect(loadDailySave(null, "2026-11-05")).toEqual([]);
-    expect(loadDailySave("{not json", "2026-11-05")).toEqual([]);
-    expect(loadDailySave(save("2026-11-05", "crane"), "2026-11-05")).toEqual([]);
-    expect(loadDailySave(save("2026-11-05", ["crane", 7, "TOOLONG", "slate"]), "2026-11-05")).toEqual(["crane", "slate"]);
+    expect(loadDailySave(null, "2026-11-05")).toBeNull();
+    expect(loadDailySave("{not json", "2026-11-05")).toBeNull();
+    expect(loadDailySave(save("2026-11-05", "crane"), "2026-11-05")).toBeNull();
+    expect(guessesOf(save("2026-11-05", ["crane", 7, "TOOLONG", "slate"]))).toEqual(["crane", "slate"]);
   });
 
   it("never restores more than six guesses", () => {
-    expect(loadDailySave(save("2026-11-05", Array(9).fill("crane")), "2026-11-05")).toHaveLength(6);
+    expect(guessesOf(save("2026-11-05", Array(9).fill("crane")))).toHaveLength(6);
   });
 });
